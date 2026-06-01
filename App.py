@@ -10,37 +10,32 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score
 
-# -----------------------------
+# --------------------------------------------------
 # PAGE CONFIG
-# -----------------------------
+# --------------------------------------------------
 st.set_page_config(
     page_title="Banking Fraud Detection",
     page_icon="🏦",
     layout="wide"
 )
 
-st.title("🏦 Banking Fraud Detection System")
-st.markdown("---")
+st.title("🏦 Banking Fraud Detection Dashboard")
 
-# -----------------------------
-# LOAD DATASET
-# -----------------------------
+# --------------------------------------------------
+# LOAD DATA
+# --------------------------------------------------
 try:
     df = pd.read_csv("banking_transactions.csv")
-
-    st.success("Dataset Loaded Successfully!")
-
 except Exception as e:
     st.error(f"Error loading dataset: {e}")
     st.stop()
 
-# -----------------------------
+# --------------------------------------------------
 # DATA PREVIEW
-# -----------------------------
+# --------------------------------------------------
 st.subheader("Dataset Preview")
-
 st.dataframe(df.head())
 
 col1, col2, col3 = st.columns(3)
@@ -52,14 +47,12 @@ with col2:
     st.metric("Columns", df.shape[1])
 
 with col3:
-    st.metric("Missing Values", df.isnull().sum().sum())
+    st.metric("Missing Values", int(df.isnull().sum().sum()))
 
-st.markdown("---")
-
-# -----------------------------
-# DATA INFORMATION
-# -----------------------------
-st.subheader("Dataset Information")
+# --------------------------------------------------
+# DATA TYPES
+# --------------------------------------------------
+st.subheader("Column Information")
 
 info_df = pd.DataFrame({
     "Column": df.columns,
@@ -69,9 +62,9 @@ info_df = pd.DataFrame({
 
 st.dataframe(info_df)
 
-# -----------------------------
+# --------------------------------------------------
 # MISSING VALUES
-# -----------------------------
+# --------------------------------------------------
 st.subheader("Missing Values")
 
 missing_df = pd.DataFrame(
@@ -81,62 +74,69 @@ missing_df = pd.DataFrame(
 
 st.dataframe(missing_df)
 
-# -----------------------------
-# NUMERICAL FEATURES
-# -----------------------------
-numerical_cols = df.select_dtypes(
-    include=["int64", "float64"]
+# --------------------------------------------------
+# NUMERIC & CATEGORICAL
+# --------------------------------------------------
+numeric_cols = df.select_dtypes(
+    include=np.number
 ).columns.tolist()
 
 categorical_cols = df.select_dtypes(
-    include=["object"]
+    exclude=np.number
 ).columns.tolist()
 
-# -----------------------------
+# --------------------------------------------------
 # HISTOGRAM
-# -----------------------------
-st.subheader("Histogram")
+# --------------------------------------------------
+if len(numeric_cols) > 0:
 
-if len(numerical_cols) > 0:
+    st.subheader("Histogram")
 
     selected_col = st.selectbox(
-        "Select Numerical Feature",
-        numerical_cols
+        "Select Numeric Column",
+        numeric_cols
     )
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.histplot(df[selected_col], kde=True, ax=ax)
 
-    ax.set_title(selected_col)
+    sns.histplot(
+        df[selected_col],
+        kde=True,
+        ax=ax
+    )
 
     st.pyplot(fig)
 
-# -----------------------------
+# --------------------------------------------------
 # BOXPLOT
-# -----------------------------
-st.subheader("Boxplot")
+# --------------------------------------------------
+if len(numeric_cols) > 0:
 
-if len(numerical_cols) > 0:
+    st.subheader("Boxplot")
 
-    selected_box = st.selectbox(
-        "Select Feature for Boxplot",
-        numerical_cols,
-        key="boxplot"
+    box_col = st.selectbox(
+        "Select Column for Boxplot",
+        numeric_cols,
+        key="box"
     )
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.boxplot(y=df[selected_box], ax=ax)
+
+    sns.boxplot(
+        y=df[box_col],
+        ax=ax
+    )
 
     st.pyplot(fig)
 
-# -----------------------------
-# CORRELATION HEATMAP
-# -----------------------------
-st.subheader("Correlation Heatmap")
+# --------------------------------------------------
+# CORRELATION
+# --------------------------------------------------
+if len(numeric_cols) > 1:
 
-if len(numerical_cols) > 1:
+    st.subheader("Correlation Heatmap")
 
-    corr = df[numerical_cols].corr()
+    corr = df[numeric_cols].corr()
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
@@ -144,24 +144,22 @@ if len(numerical_cols) > 1:
         corr,
         annot=True,
         cmap="coolwarm",
-        fmt=".2f",
         ax=ax
     )
 
     st.pyplot(fig)
 
-# -----------------------------
+# --------------------------------------------------
 # TARGET COLUMN
-# -----------------------------
-st.markdown("---")
+# --------------------------------------------------
 st.subheader("Fraud Detection Model")
 
 possible_targets = [
     "fraud_flag",
-    "Fraud",
     "is_fraud",
-    "target",
-    "Class"
+    "Fraud",
+    "Class",
+    "target"
 ]
 
 target_col = None
@@ -180,67 +178,86 @@ if target_col is None:
 
 st.success(f"Target Column: {target_col}")
 
-# -----------------------------
+# --------------------------------------------------
 # PREPROCESSING
-# -----------------------------
+# --------------------------------------------------
 data = df.copy()
 
-# Remove ID columns if present
-for col in data.columns:
-    if "id" in col.lower():
-        data.drop(col, axis=1, inplace=True)
+# Remove ID columns
+drop_cols = []
 
-# Fill missing values
+for col in data.columns:
+    if "id" in col.lower() and col != target_col:
+        drop_cols.append(col)
+
+if drop_cols:
+    data.drop(columns=drop_cols, inplace=True)
+
+# Fill missing values safely
 for col in data.columns:
 
-    if data[col].dtype == "object":
-        data[col].fillna(data[col].mode()[0], inplace=True)
+    if pd.api.types.is_numeric_dtype(data[col]):
+        data[col] = data[col].fillna(
+            data[col].median()
+        )
 
     else:
-        data[col].fillna(data[col].median(), inplace=True)
+        data[col] = data[col].fillna(
+            data[col].mode()[0]
+        )
 
 # Encode categorical columns
 label_encoders = {}
 
-for col in data.select_dtypes(include="object").columns:
+for col in data.select_dtypes(
+    include=["object"]
+).columns:
 
-    le = LabelEncoder()
+    encoder = LabelEncoder()
 
-    data[col] = le.fit_transform(
+    data[col] = encoder.fit_transform(
         data[col].astype(str)
     )
 
-    label_encoders[col] = le
+    label_encoders[col] = encoder
 
-# -----------------------------
+# --------------------------------------------------
 # FEATURES & TARGET
-# -----------------------------
-X = data.drop(target_col, axis=1)
+# --------------------------------------------------
+X = data.drop(columns=[target_col])
 y = data[target_col]
 
-# -----------------------------
+# Encode target if needed
+if y.dtype == "object":
+
+    target_encoder = LabelEncoder()
+
+    y = target_encoder.fit_transform(y)
+
+# --------------------------------------------------
 # TRAIN TEST SPLIT
-# -----------------------------
+# --------------------------------------------------
 X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
-    test_size=0.20,
-    random_state=42,
-    stratify=y
+    test_size=0.2,
+    random_state=42
 )
 
-# -----------------------------
-# SCALING
-# -----------------------------
+# --------------------------------------------------
+# SCALE DATA
+# --------------------------------------------------
 scaler = MinMaxScaler()
 
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# -----------------------------
-# MODEL TRAINING
-# -----------------------------
+# --------------------------------------------------
+# TRAIN MODELS
+# --------------------------------------------------
 if st.button("Train Models"):
+
+    results = []
 
     models = {
         "Logistic Regression":
@@ -256,8 +273,6 @@ if st.button("Train Models"):
             DecisionTreeClassifier(random_state=42)
     }
 
-    results = []
-
     for name, model in models.items():
 
         if name == "KNN":
@@ -267,7 +282,7 @@ if st.button("Train Models"):
                 y_train
             )
 
-            prediction = model.predict(
+            predictions = model.predict(
                 X_test_scaled
             )
 
@@ -278,47 +293,47 @@ if st.button("Train Models"):
                 y_train
             )
 
-            prediction = model.predict(
+            predictions = model.predict(
                 X_test
             )
 
         accuracy = accuracy_score(
             y_test,
-            prediction
+            predictions
         )
 
-        results.append(
-            [name, accuracy]
-        )
+        results.append([
+            name,
+            round(accuracy, 4)
+        ])
 
-    result_df = pd.DataFrame(
+    results_df = pd.DataFrame(
         results,
         columns=["Model", "Accuracy"]
     )
 
     st.subheader("Model Comparison")
-
     st.dataframe(
-        result_df.sort_values(
+        results_df.sort_values(
             by="Accuracy",
             ascending=False
         )
     )
 
-    best_model = result_df.sort_values(
+    best_model = results_df.sort_values(
         by="Accuracy",
         ascending=False
     ).iloc[0]
 
     st.success(
         f"Best Model: {best_model['Model']} "
-        f" | Accuracy = {best_model['Accuracy']:.4f}"
+        f"(Accuracy = {best_model['Accuracy']})"
     )
 
     fig, ax = plt.subplots(figsize=(8, 4))
 
     sns.barplot(
-        data=result_df,
+        data=results_df,
         x="Model",
         y="Accuracy",
         ax=ax
@@ -329,4 +344,4 @@ if st.button("Train Models"):
     st.pyplot(fig)
 
 st.markdown("---")
-st.caption("Banking Fraud Detection Dashboard using Streamlit")
+st.caption("Banking Fraud Detection using Streamlit")
