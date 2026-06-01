@@ -1,15 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, MinMaxScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.preprocessing import LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
 # --------------------------------------------------
@@ -21,15 +14,19 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🏦 Banking Fraud Detection Dashboard")
+st.title("🏦 Banking Fraud Detection System")
 
 # --------------------------------------------------
-# LOAD DATA
+# LOAD DATASET
 # --------------------------------------------------
+@st.cache_data
+def load_data():
+    return pd.read_csv("banking_transactions.csv")
+
 try:
-    df = pd.read_csv("banking_transactions.csv")
+    df = load_data()
 except Exception as e:
-    st.error(f"Error loading dataset: {e}")
+    st.error(f"Dataset Error: {e}")
     st.stop()
 
 # --------------------------------------------------
@@ -38,204 +35,28 @@ except Exception as e:
 st.subheader("Dataset Preview")
 st.dataframe(df.head())
 
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric("Rows", df.shape[0])
-
-with col2:
-    st.metric("Columns", df.shape[1])
-
-with col3:
-    st.metric("Missing Values", int(df.isnull().sum().sum()))
-
-# --------------------------------------------------
-# DATA TYPES
-# --------------------------------------------------
-st.subheader("Column Information")
-
-info_df = pd.DataFrame({
-    "Column": df.columns,
-    "Data Type": df.dtypes.astype(str),
-    "Missing Values": df.isnull().sum().values
-})
-
-st.dataframe(info_df)
-
-# --------------------------------------------------
-# MISSING VALUES
-# --------------------------------------------------
-st.subheader("Missing Values")
-
-missing_df = pd.DataFrame(
-    df.isnull().sum(),
-    columns=["Missing Count"]
-)
-
-st.dataframe(missing_df)
-
-# --------------------------------------------------
-# NUMERIC & CATEGORICAL
-# --------------------------------------------------
-numeric_cols = df.select_dtypes(
-    include=np.number
-).columns.tolist()
-
-categorical_cols = df.select_dtypes(
-    exclude=np.number
-).columns.tolist()
-
-# --------------------------------------------------
-# HISTOGRAM
-# --------------------------------------------------
-if len(numeric_cols) > 0:
-
-    st.subheader("Histogram")
-
-    selected_col = st.selectbox(
-        "Select Numeric Column",
-        numeric_cols
-    )
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-
-    sns.histplot(
-        df[selected_col],
-        kde=True,
-        ax=ax
-    )
-
-    st.pyplot(fig)
-
-# --------------------------------------------------
-# BOXPLOT
-# --------------------------------------------------
-if len(numeric_cols) > 0:
-
-    st.subheader("Boxplot")
-
-    box_col = st.selectbox(
-        "Select Column for Boxplot",
-        numeric_cols,
-        key="box"
-    )
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-
-    sns.boxplot(
-        y=df[box_col],
-        ax=ax
-    )
-
-    st.pyplot(fig)
-
-# --------------------------------------------------
-# CORRELATION
-# --------------------------------------------------
-if len(numeric_cols) > 1:
-
-    st.subheader("Correlation Heatmap")
-
-    corr = df[numeric_cols].corr()
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    sns.heatmap(
-        corr,
-        annot=True,
-        cmap="coolwarm",
-        ax=ax
-    )
-
-    st.pyplot(fig)
-
-# --------------------------------------------------
-# TARGET COLUMN
-# --------------------------------------------------
-st.subheader("Fraud Detection Model")
-
-possible_targets = [
-    "fraud_flag",
-    "is_fraud",
-    "Fraud",
-    "Class",
-    "target"
-]
-
-target_col = None
-
-for col in possible_targets:
-    if col in df.columns:
-        target_col = col
-        break
-
-if target_col is None:
-
-    target_col = st.selectbox(
-        "Select Target Column",
-        df.columns
-    )
-
-st.success(f"Target Column: {target_col}")
-
 # --------------------------------------------------
 # PREPROCESSING
 # --------------------------------------------------
 data = df.copy()
 
-# Remove ID columns
-drop_cols = []
+encoders = {}
 
-for col in data.columns:
-    if "id" in col.lower() and col != target_col:
-        drop_cols.append(col)
+categorical_cols = [
+    "payment_channel",
+    "authentication_type"
+]
 
-if drop_cols:
-    data.drop(columns=drop_cols, inplace=True)
+for col in categorical_cols:
+    le = LabelEncoder()
+    data[col] = le.fit_transform(data[col])
+    encoders[col] = le
 
-# Fill missing values safely
-for col in data.columns:
-
-    if pd.api.types.is_numeric_dtype(data[col]):
-        data[col] = data[col].fillna(
-            data[col].median()
-        )
-
-    else:
-        data[col] = data[col].fillna(
-            data[col].mode()[0]
-        )
-
-# Encode categorical columns
-label_encoders = {}
-
-for col in data.select_dtypes(
-    include=["object"]
-).columns:
-
-    encoder = LabelEncoder()
-
-    data[col] = encoder.fit_transform(
-        data[col].astype(str)
-    )
-
-    label_encoders[col] = encoder
+X = data.drop("fraud_flag", axis=1)
+y = data["fraud_flag"]
 
 # --------------------------------------------------
-# FEATURES & TARGET
-# --------------------------------------------------
-X = data.drop(columns=[target_col])
-y = data[target_col]
-
-# Encode target if needed
-if y.dtype == "object":
-
-    target_encoder = LabelEncoder()
-
-    y = target_encoder.fit_transform(y)
-
-# --------------------------------------------------
-# TRAIN TEST SPLIT
+# TRAIN MODEL
 # --------------------------------------------------
 X_train, X_test, y_train, y_test = train_test_split(
     X,
@@ -244,104 +65,198 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42
 )
 
+model = RandomForestClassifier(
+    n_estimators=100,
+    random_state=42
+)
+
+model.fit(X_train, y_train)
+
+pred = model.predict(X_test)
+
+accuracy = accuracy_score(y_test, pred)
+
+st.success(f"Model Accuracy: {accuracy:.2%}")
+
 # --------------------------------------------------
-# SCALE DATA
+# FRAUD PREDICTION FORM
 # --------------------------------------------------
-scaler = MinMaxScaler()
+st.header("🔍 Check Transaction")
 
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+col1, col2 = st.columns(2)
+
+with col1:
+
+    transaction_amount = st.number_input(
+        "Transaction Amount",
+        min_value=0.0,
+        value=100.0
+    )
+
+    login_attempts = st.number_input(
+        "Login Attempts",
+        min_value=0,
+        value=1
+    )
+
+    device_risk_score = st.number_input(
+        "Device Risk Score",
+        min_value=0.0,
+        value=10.0
+    )
+
+    transfer_frequency = st.number_input(
+        "Transfer Frequency",
+        min_value=0,
+        value=1
+    )
+
+    anomaly_score = st.number_input(
+        "Anomaly Score",
+        min_value=0.0,
+        value=10.0
+    )
+
+    account_age_days = st.number_input(
+        "Account Age (Days)",
+        min_value=0,
+        value=365
+    )
+
+    transaction_time_hour = st.slider(
+        "Transaction Hour",
+        0,
+        23,
+        12
+    )
+
+    failed_transactions_last_30d = st.number_input(
+        "Failed Transactions (Last 30 Days)",
+        min_value=0,
+        value=0
+    )
+
+with col2:
+
+    avg_monthly_balance = st.number_input(
+        "Average Monthly Balance",
+        min_value=0.0,
+        value=5000.0
+    )
+
+    daily_transaction_count = st.number_input(
+        "Daily Transaction Count",
+        min_value=0,
+        value=2
+    )
+
+    geo_distance_km = st.number_input(
+        "Geo Distance (KM)",
+        min_value=0.0,
+        value=5.0
+    )
+
+    session_duration_minutes = st.number_input(
+        "Session Duration (Minutes)",
+        min_value=0.0,
+        value=10.0
+    )
+
+    transaction_velocity_score = st.number_input(
+        "Transaction Velocity Score",
+        min_value=0.0,
+        value=10.0
+    )
+
+    payment_channel = st.selectbox(
+        "Payment Channel",
+        encoders["payment_channel"].classes_
+    )
+
+    authentication_type = st.selectbox(
+        "Authentication Type",
+        encoders["authentication_type"].classes_
+    )
+
+    card_present_flag = st.selectbox(
+        "Card Present",
+        [0, 1]
+    )
+
+    international_transaction_flag = st.selectbox(
+        "International Transaction",
+        [0, 1]
+    )
+
+    suspicious_ip_flag = st.selectbox(
+        "Suspicious IP",
+        [0, 1]
+    )
 
 # --------------------------------------------------
-# TRAIN MODELS
+# PREDICTION
 # --------------------------------------------------
-if st.button("Train Models"):
+if st.button("Predict Fraud"):
 
-    results = []
+    payment_channel_encoded = (
+        encoders["payment_channel"]
+        .transform([payment_channel])[0]
+    )
 
-    models = {
-        "Logistic Regression":
-            LogisticRegression(max_iter=1000),
+    authentication_type_encoded = (
+        encoders["authentication_type"]
+        .transform([authentication_type])[0]
+    )
 
-        "KNN":
-            KNeighborsClassifier(n_neighbors=5),
+    input_data = pd.DataFrame([{
+        "transaction_amount": transaction_amount,
+        "login_attempts": login_attempts,
+        "device_risk_score": device_risk_score,
+        "transfer_frequency": transfer_frequency,
+        "anomaly_score": anomaly_score,
+        "account_age_days": account_age_days,
+        "transaction_time_hour": transaction_time_hour,
+        "failed_transactions_last_30d":
+            failed_transactions_last_30d,
+        "avg_monthly_balance": avg_monthly_balance,
+        "daily_transaction_count":
+            daily_transaction_count,
+        "geo_distance_km": geo_distance_km,
+        "session_duration_minutes":
+            session_duration_minutes,
+        "transaction_velocity_score":
+            transaction_velocity_score,
+        "payment_channel":
+            payment_channel_encoded,
+        "authentication_type":
+            authentication_type_encoded,
+        "card_present_flag":
+            card_present_flag,
+        "international_transaction_flag":
+            international_transaction_flag,
+        "suspicious_ip_flag":
+            suspicious_ip_flag
+    }])
 
-        "Naive Bayes":
-            GaussianNB(),
+    prediction = model.predict(input_data)[0]
 
-        "Decision Tree":
-            DecisionTreeClassifier(random_state=42)
-    }
+    probability = model.predict_proba(
+        input_data
+    )[0][1]
 
-    for name, model in models.items():
-
-        if name == "KNN":
-
-            model.fit(
-                X_train_scaled,
-                y_train
-            )
-
-            predictions = model.predict(
-                X_test_scaled
-            )
-
-        else:
-
-            model.fit(
-                X_train,
-                y_train
-            )
-
-            predictions = model.predict(
-                X_test
-            )
-
-        accuracy = accuracy_score(
-            y_test,
-            predictions
+    if prediction == 1:
+        st.error(
+            f"⚠️ Fraudulent Transaction\n\n"
+            f"Fraud Probability: {probability:.2%}"
+        )
+    else:
+        st.success(
+            f"✅ Legitimate Transaction\n\n"
+            f"Fraud Probability: {probability:.2%}"
         )
 
-        results.append([
-            name,
-            round(accuracy, 4)
-        ])
-
-    results_df = pd.DataFrame(
-        results,
-        columns=["Model", "Accuracy"]
-    )
-
-    st.subheader("Model Comparison")
-    st.dataframe(
-        results_df.sort_values(
-            by="Accuracy",
-            ascending=False
-        )
-    )
-
-    best_model = results_df.sort_values(
-        by="Accuracy",
-        ascending=False
-    ).iloc[0]
-
-    st.success(
-        f"Best Model: {best_model['Model']} "
-        f"(Accuracy = {best_model['Accuracy']})"
-    )
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-
-    sns.barplot(
-        data=results_df,
-        x="Model",
-        y="Accuracy",
-        ax=ax
-    )
-
-    plt.xticks(rotation=15)
-
-    st.pyplot(fig)
-
+# --------------------------------------------------
+# FOOTER
+# --------------------------------------------------
 st.markdown("---")
-st.caption("Banking Fraud Detection using Streamlit")
+st.caption("Banking Fraud Detection using Random Forest")
