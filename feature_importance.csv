@@ -1,0 +1,23 @@
+Feature,Importance
+anomaly_score,0.6221718829358361
+geo_distance_km,0.03535180701271045
+avg_monthly_balance,0.033455106628067895
+account_age_days,0.03161743516002838
+device_risk_score,0.030941594339349416
+transaction_amount,0.030831269731640715
+transaction_velocity_score,0.030397284703936718
+session_duration_minutes,0.030021190539155588
+daily_transaction_count,0.02990004573591777
+transfer_frequency,0.026932294235321445
+failed_transactions_last_30d,0.021831902441555036
+transaction_time_hour,0.021238548539054224
+login_attempts,0.018484658430647168
+card_present_flag,0.004915475808023967
+international_transaction_flag,0.004844336287260372
+suspicious_ip_flag,0.004621742133233372
+authentication_type_OTP,0.004361960768026552
+payment_channel_Mobile App,0.0041156296031372155
+payment_channel_Web Banking,0.004015791657364501
+authentication_type_Two-Factor Authentication,0.0037485115417670856
+authentication_type_Password Only,0.003549867541605631
+payment_channel_POS Terminal,0.002651664226360393
