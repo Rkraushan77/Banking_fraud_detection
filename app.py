@@ -10,6 +10,48 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# -------------------------------------------------
+# Navigation
+# -------------------------------------------------
+home = st.Page(
+    "pages/1_🏠_Home.py",
+    title="Home",
+    icon="🏠"
+)
+
+dashboard = st.Page(
+    "pages/2_📊_Dashboard.py",
+    title="Dashboard",
+    icon="📊"
+)
+
+predict = st.Page(
+    "pages/3_🤖_Predict.py",
+    title="Predict",
+    icon="🤖"
+)
+
+model_performance = st.Page(
+    "pages/4_📈_Model_Performance.py",
+    title="Model Performance",
+    icon="📈"
+)
+
+about = st.Page(
+    "pages/5_ℹ️_About.py",
+    title="About",
+    icon="ℹ️"
+)
+
+pg = st.navigation(
+    [home, dashboard, predict, model_performance, about],
+    position="sidebar",
+    expanded=True
+)
+
+pg.run()
+)
+
 # ============================================================
 # CUSTOM LIGHT THEME
 # ============================================================
